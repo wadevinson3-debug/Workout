@@ -1,0 +1,902 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>ProTracker — Workout & Maxes</title>
+
+  <!-- Chart.js for progress graphs -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+  <style>
+    /* -------------------------
+       Minimal Professional Theme
+       ------------------------- */
+    :root{
+      --bg: #f6f7f9;
+      --panel: #ffffff;
+      --muted: #6b6f76;
+      --accent: #1f6feb; /* professional blue */
+      --accent-2: #0b66ff;
+      --success: #16a34a;
+      --danger: #ef4444;
+      --card-radius: 12px;
+      --glass: rgba(11,13,17,0.03);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:#0f1721;-webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;}
+    .app{min-height:100vh;display:flex;flex-direction:column;}
+
+    /* Top header */
+    header{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:linear-gradient(180deg, #fff, #f4f6f9);box-shadow:0 2px 8px rgba(15,23,33,0.04)}
+    .brand{display:flex;gap:12px;align-items:center}
+    .logo{width:44px;height:44px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--accent-2));display:flex;align-items:center;justify-content:center;color:white;font-weight:800}
+    h1{margin:0;font-size:16px}
+
+    /* Main content area */
+    main{flex:1;padding:14px;display:flex;flex-direction:column;gap:12px;max-width:1100px;margin:0 auto;width:100%}
+    .card{background:var(--panel);border-radius:var(--card-radius);padding:14px;border:1px solid rgba(11,13,17,0.04);box-shadow:0 6px 20px rgba(11,13,17,0.03)}
+    .muted{color:var(--muted);font-size:13px}
+
+    /* Forms */
+    .row{display:flex;gap:8px}
+    .col{flex:1}
+    input[type="text"], input[type="number"], input[type="password"], select {
+      width:100%;padding:10px;border-radius:10px;border:1px solid rgba(15,23,33,0.06);background:transparent;font-size:14px;
+    }
+    button { background:var(--accent); color:white; padding:10px 14px; border-radius:10px;border:none; cursor:pointer; font-weight:700 }
+    button.ghost{background:transparent;color:var(--accent);border:1px solid rgba(15,23,33,0.06)}
+    small {font-size:12px;color:var(--muted)}
+
+    /* Bottom nav (mobile-first) */
+    nav.bottom-nav{position:fixed;left:0;right:0;bottom:0;height:64px;background:var(--panel);display:flex;justify-content:space-around;align-items:center;border-top:1px solid rgba(11,13,17,0.04)}
+    nav.bottom-nav button{background:transparent;border:none;display:flex;flex-direction:column;align-items:center;color:var(--muted);font-weight:700}
+    nav.bottom-nav button.active{color:var(--accent)}
+    .icon{font-size:18px;margin-bottom:4px}
+
+    /* Responsive layout for larger screens: show sidebar */
+    @media(min-width:920px){
+      .layout{display:grid;grid-template-columns:260px 1fr;gap:18px;align-items:start;padding-bottom:90px}
+      nav.bottom-nav{display:none}
+      aside.sidebar{position:sticky;top:18px;height:calc(100vh - 36px);overflow:auto}
+      main{padding:24px}
+    }
+
+    aside.sidebar{display:flex;flex-direction:column;gap:8px}
+    aside .nav-button{display:flex;gap:10px;align-items:center;padding:10px;border-radius:10px;border:none;background:transparent;color:var(--muted);cursor:pointer}
+    aside .nav-button.active{background:linear-gradient(90deg, rgba(31,111,235,0.08), rgba(11,102,255,0.02));color:var(--accent);font-weight:800}
+    .section-title{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px}
+
+    /* Table like layout for maxes */
+    .max-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+    .lift-card{padding:12px;border-radius:10px;border:1px solid rgba(11,13,17,0.04);background:var(--glass)}
+    .percent-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+    .percent-pill{padding:6px 8px;border-radius:8px;background:rgba(11,13,17,0.02);font-size:12px;color:var(--muted)}
+
+    /* Program day tabs */
+    .day-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+    .day-pill{padding:8px 12px;border-radius:999px;border:1px solid rgba(11,13,17,0.04);background:transparent;color:var(--muted);cursor:pointer}
+    .day-pill.active{background:var(--accent);color:white}
+
+    /* workout item */
+    .workout-item{display:flex;justify-content:space-between;align-items:center;padding:10px;border-radius:8px;border:1px solid rgba(11,13,17,0.04);margin-bottom:8px}
+    .workout-item .meta{color:var(--muted);font-size:13px}
+
+    /* small helpers */
+    .right{margin-left:auto}
+    .controls{display:flex;gap:8px;flex-wrap:wrap}
+    .hide{display:none}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div class="brand">
+        <div class="logo">PT</div>
+        <div>
+          <h1>ProTracker</h1>
+          <div class="muted">Personal workout plans & max tracking</div>
+        </div>
+      </div>
+      <div class="controls" id="headerControls"></div>
+    </header>
+
+    <div class="layout" id="layout">
+      <!-- Sidebar (desktop) -->
+      <aside class="sidebar card" id="sidebar">
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div style="font-weight:800">Menu</div>
+          <button class="nav-button" data-view="dashboard" onclick="navTo('dashboard', true)"><span class="icon">🏠</span> Dashboard</button>
+          <button class="nav-button" data-view="maxes" onclick="navTo('maxes', true)"><span class="icon">💪</span> Maxes</button>
+          <button class="nav-button" data-view="program" onclick="navTo('program', true)"><span class="icon">📅</span> Program</button>
+          <button class="nav-button" data-view="progress" onclick="navTo('progress', true)"><span class="icon">📈</span> Progress</button>
+          <button class="nav-button" data-view="settings" onclick="navTo('settings', true)"><span class="icon">⚙️</span> Settings</button>
+        </div>
+      </aside>
+
+      <!-- Main -->
+      <main id="mainContent">
+        <!-- Content injected here -->
+      </main>
+    </div>
+
+    <!-- Mobile bottom nav -->
+    <nav class="bottom-nav" id="bottomNav" aria-hidden="false">
+      <button data-view="dashboard" onclick="navTo('dashboard')" class="active"><div class="icon">🏠</div>Home</button>
+      <button data-view="maxes" onclick="navTo('maxes')"><div class="icon">💪</div>Maxes</button>
+      <button data-view="program" onclick="navTo('program')"><div class="icon">📅</div>Plan</button>
+      <button data-view="progress" onclick="navTo('progress')"><div class="icon">📈</div>Progress</button>
+      <button data-view="settings" onclick="navTo('settings')"><div class="icon">⚙️</div>More</button>
+    </nav>
+  </div>
+
+  <script>
+  /* ===========================================
+     ProTracker — Single-file app (localStorage)
+     - PIN login (4-digit) + display name
+     - Default lifts + add custom lifts
+     - 3 onboarding modes (fixed plan, level-based, custom wizard)
+     - Auto-save on change
+     - Progress graphs using Chart.js
+     =========================================== */
+
+  // STORAGE KEY
+  const STORAGE_KEY = 'protracker_v1';
+
+  // default data structure
+  function initialStore(){
+    return {
+      users: {},           // username => userObj
+      currentUser: null
+    };
+  }
+
+  // default lifts list (common)
+  const DEFAULT_LIFTS = [
+    "Bench Press","Squat","Deadlift","Incline Bench","Overhead Press",
+    "Barbell Row","Lat Pulldown","Seated Row","Leg Press","Hamstring Curl",
+    "Calf Raises","Bicep Curl","Tricep Pushdown"
+  ];
+
+  // load/save helpers
+  function loadStore(){
+    try{
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if(!raw) {
+        const s = initialStore();
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
+        return s;
+      }
+      return JSON.parse(raw);
+    }catch(e){
+      console.error('load error',e);
+      const s = initialStore();
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
+      return s;
+    }
+  }
+  function saveStore(s){ localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); }
+
+  // util: hash PIN using SHA-256 (returns hex string)
+  async function hashPin(pin){
+    const enc = new TextEncoder();
+    const data = enc.encode(String(pin));
+    const hash = await crypto.subtle.digest('SHA-256', data);
+    const arr = Array.from(new Uint8Array(hash));
+    return arr.map(b => b.toString(16).padStart(2,'0')).join('');
+  }
+
+  // app state
+  let store = loadStore();
+
+  // ---------- Helper: get/set current user ----------
+  function currentUser(){
+    if (!store.currentUser) return null;
+    return store.users[store.currentUser] || null;
+  }
+  function setCurrentUser(username){
+    store.currentUser = username;
+    saveStore(store);
+  }
+
+  // ---------- Initial onboarding & auth UI ----------
+  async function showAuthScreen(){
+    // If there is a remembered user, prompt for PIN quickly
+    const container = document.getElementById('mainContent');
+    container.innerHTML = `
+      <div class="card" style="max-width:680px;margin:8px auto">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <h2>Welcome to ProTracker</h2>
+            <div class="muted">Sign up with a display name and a 4-digit PIN. We'll remember you on this device.</div>
+          </div>
+        </div>
+
+        <div style="margin-top:14px;display:grid;gap:10px">
+          <input id="authName" type="text" placeholder="Display name (e.g., John)">
+          <input id="authPin" type="password" inputmode="numeric" maxlength="4" placeholder="4-digit PIN (numbers only)">
+          <div style="display:flex;gap:8px">
+            <button id="signupBtn">Create account</button>
+            <button id="quickLoginBtn" class="ghost">Quick login (existing)</button>
+          </div>
+          <small>PINs are stored as secure hashes in your browser. If you forget your PIN, you can re-create the account name to reset.</small>
+        </div>
+      </div>
+    `;
+    document.getElementById('signupBtn').onclick = async ()=>{
+      const name = document.getElementById('authName').value.trim();
+      const pin = document.getElementById('authPin').value.trim();
+      if (!name) return alert('Enter a display name.');
+      if (!/^\d{4}$/.test(pin)) return alert('PIN must be exactly 4 digits.');
+      await createAccount(name, pin);
+      // auto-complete onboarding immediately
+      await openOnboardingModal(name);
+      navTo('dashboard');
+    };
+    document.getElementById('quickLoginBtn').onclick = async ()=>{
+      await showQuickLoginDialog();
+    };
+  }
+
+  async function createAccount(name, pin){
+    // username normalized
+    const username = name.toLowerCase().replace(/\s+/g,'_');
+    // if user exists, confirm overwrite? We'll allow separate accounts with same display name by suffix
+    let finalUsername = username;
+    let idx = 1;
+    while (store.users[finalUsername]) {
+      finalUsername = username + '_' + idx++;
+    }
+    const pinHash = await hashPin(pin);
+    // create user object
+    const user = {
+      displayName: name,
+      username: finalUsername,
+      pinHash,
+      settings: {
+        planMode: 'fixed', // 'fixed' | 'level' | 'custom'
+        experience: 'intermediate', // beginner/intermediate/advanced
+        goal: 'muscle', // muscle/strength/loss/maintain/athletic
+        daysPerWeek: 4
+      },
+      maxes: {},     // liftName -> number
+      history: {},   // liftName -> [{value,ts},...]
+      program: null, // weekly plan object
+      createdAt: new Date().toISOString()
+    };
+    // populate default lifts blank
+    DEFAULT_LIFTS.forEach(l => { user.maxes[l] = ''; user.history[l] = []; });
+    // generate default program
+    user.program = generateProgram(user.settings);
+    // save
+    store.users[finalUsername] = user;
+    setCurrentUser(finalUsername);
+    saveStore(store);
+    // auto-save done
+    return finalUsername;
+  }
+
+  async function showQuickLoginDialog(){
+    // quick login box
+    const name = prompt('Enter your display name (exact):');
+    if (!name) return;
+    // find matching users
+    const candidates = Object.values(store.users).filter(u => u.displayName.toLowerCase() === name.toLowerCase());
+    if (candidates.length === 0) return alert('No account found with that name on this device. Create a new one.');
+    const chosen = candidates[0];
+    const pin = prompt('Enter your 4-digit PIN:');
+    if (!/^\d{4}$/.test(pin)) return alert('PIN must be 4 digits.');
+    const pinHash = await hashPin(pin);
+    if (pinHash !== chosen.pinHash) return alert('Incorrect PIN.');
+    // login
+    setCurrentUser(chosen.username);
+    navTo('dashboard');
+  }
+
+  // ---------- Onboarding modal (combined modes) ----------
+  async function openOnboardingModal(username){
+    // present modal-like flow in main area
+    const container = document.getElementById('mainContent');
+    container.innerHTML = `
+      <div class="card" style="max-width:860px;margin:8px auto">
+        <h2>Welcome, ${username} — let's set up your plan</h2>
+        <div class="muted">Choose how you'd like your weekly workout plan created. You can change this anytime in Settings.</div>
+
+        <div style="margin-top:12px;display:grid;gap:8px">
+          <label><strong>Plan generation mode</strong></label>
+          <select id="planMode">
+            <option value="fixed">Fixed weekly plan (pre-filled Sun→Sat)</option>
+            <option value="level">Choose Beginner / Intermediate / Advanced (auto %s)</option>
+            <option value="custom">Custom wizard (goal, experience, days)</option>
+          </select>
+
+          <div id="levelOptions" class="hide">
+            <label>Experience</label>
+            <select id="experience">
+              <option>beginner</option>
+              <option selected>intermediate</option>
+              <option>advanced</option>
+            </select>
+          </div>
+
+          <div id="customOptions" class="hide">
+            <label>Goal</label>
+            <select id="customGoal">
+              <option value="muscle">Muscle growth</option>
+              <option value="strength">Strength</option>
+              <option value="loss">Weight loss</option>
+              <option value="maintain">Maintain</option>
+              <option value="athletic">Athletic</option>
+            </select>
+
+            <label>Days per week</label>
+            <select id="customDays">
+              <option>3</option><option selected>4</option><option>5</option><option>6</option>
+            </select>
+          </div>
+
+          <div style="display:flex;gap:8px">
+            <button id="runOnboardBtn">Create Plan</button>
+            <button id="skipOnboard" class="ghost">Skip (use defaults)</button>
+          </div>
+        </div>
+      </div>
+    `;
+    // events
+    const planMode = document.getElementById('planMode');
+    const lvl = document.getElementById('levelOptions');
+    const custom = document.getElementById('customOptions');
+    planMode.onchange = ()=> {
+      if (planMode.value === 'level'){ lvl.classList.remove('hide'); custom.classList.add('hide'); }
+      else if (planMode.value === 'custom'){ lvl.classList.add('hide'); custom.classList.remove('hide'); }
+      else { lvl.classList.add('hide'); custom.classList.add('hide'); }
+    };
+    document.getElementById('runOnboardBtn').onclick = ()=> {
+      const mode = planMode.value;
+      const user = currentUser();
+      user.settings.planMode = mode;
+      if (mode === 'level') user.settings.experience = document.getElementById('experience').value;
+      if (mode === 'custom'){ user.settings.goal = document.getElementById('customGoal').value; user.settings.daysPerWeek = Number(document.getElementById('customDays').value); }
+      // regenerate program
+      user.program = generateProgram(user.settings);
+      // save
+      store.users[store.currentUser] = user;
+      saveStore(store);
+      navTo('dashboard');
+    };
+    document.getElementById('skipOnboard').onclick = ()=> {
+      const user = currentUser();
+      user.program = generateProgram(user.settings);
+      store.users[store.currentUser] = user;
+      saveStore(store);
+      navTo('dashboard');
+    };
+  }
+
+  // ---------- Program generator ----------
+  function generateProgram(settings){
+    // returns object: { sunday: [items], monday: [...], ... }
+    // items: {exercise, sets, reps, percent}
+    // We'll provide three behaviors:
+    // - fixed: prefilled program
+    // - level: same program but percent intensity changes with experience
+    // - custom: tailor to goal & daysPerWeek (simple algorithm)
+    const fixed = {
+      Sunday: [{exercise:'Active Recovery', sets:0, reps:'', percent:null}],
+      Monday: [{exercise:'Bench Press', sets:4, reps:'6', percent:70},{exercise:'Incline Bench', sets:4, reps:'8', percent:65},{exercise:'Dumbbell Press', sets:3, reps:'10', percent:55}],
+      Tuesday: [{exercise:'Barbell Row', sets:4, reps:'6', percent:70},{exercise:'Lat Pulldown', sets:4, reps:'10', percent:60},{exercise:'Seated Row', sets:3, reps:'12', percent:null}],
+      Wednesday: [{exercise:'Squat', sets:5, reps:'5', percent:75},{exercise:'Leg Press', sets:4, reps:'10', percent:60}],
+      Thursday: [{exercise:'Shoulder Press', sets:4, reps:'6', percent:70},{exercise:'DB Lateral Raise', sets:4, reps:'12', percent:null}],
+      Friday: [{exercise:'Arms Circuit', sets:4, reps:'10', percent:55}],
+      Saturday: [{exercise:'Rest/Optional Cardio', sets:0, reps:'', percent:null}]
+    };
+
+    // adapt by level
+    const levelMultipliers = { beginner: 0.9, intermediate: 1, advanced: 1.05 };
+
+    // If custom: simple rule: more days -> split body parts
+    if (settings.planMode === 'custom'){
+      const days = settings.daysPerWeek || 4;
+      const goal = settings.goal || 'muscle';
+      const program = {};
+      const weekDays = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+      // generate placeholder skeleton
+      for (let i=0;i<7;i++){
+        program[weekDays[i]] = [];
+      }
+      if (days <= 3){
+        program.Monday = [{exercise:'Full Body', sets:4, reps:'6-8', percent:70}];
+        program.Wednesday = [{exercise:'Full Body', sets:4, reps:'6-8', percent:72}];
+        program.Friday = [{exercise:'Full Body', sets:4, reps:'6-8', percent:74}];
+      } else if (days === 4){
+        program.Monday = [{exercise:'Upper', sets:4, reps:'6-8', percent:70}];
+        program.Tuesday = [{exercise:'Lower', sets:4, reps:'6-8', percent:70}];
+        program.Thursday = [{exercise:'Upper', sets:4, reps:'6-8', percent:72}];
+        program.Friday = [{exercise:'Lower', sets:4, reps:'6-8', percent:72}];
+      } else {
+        // 5-6 days
+        program.Monday = [{exercise:'Chest', sets:4, reps:'6-8', percent:70}];
+        program.Tuesday = [{exercise:'Back', sets:4, reps:'6-8', percent:70}];
+        program.Wednesday = [{exercise:'Legs', sets:5, reps:'5', percent:75}];
+        program.Thursday = [{exercise:'Shoulders', sets:4, reps:'8', percent:65}];
+        program.Friday = [{exercise:'Arms', sets:4, reps:'10', percent:60}];
+      }
+      // slightly alter % by goal
+      if (goal === 'strength'){ for (let d in program) program[d].forEach(it=>{ if (it.percent) it.percent += 5; }); }
+      if (goal === 'loss'){ for (let d in program) program[d].forEach(it=>{ if (it.percent) it.percent -= 5; }); }
+      return program;
+    }
+
+    // else fixed or level
+    if (settings.planMode === 'fixed'){
+      return fixed;
+    } else if (settings.planMode === 'level'){
+      const mult = levelMultipliers[settings.experience || 'intermediate'] || 1;
+      const program = {};
+      for (const day in fixed){
+        program[day] = fixed[day].map(it=>{
+          const copy = {...it};
+          if (copy.percent) copy.percent = Math.round(copy.percent * mult);
+          return copy;
+        });
+      }
+      return program;
+    }
+    // fallback
+    return fixed;
+  }
+
+  // ---------- Page rendering (nav) ----------
+  const main = document.getElementById('mainContent');
+  const bottomNav = document.getElementById('bottomNav');
+
+  function navTo(view, highlightSidebar=false){
+    // update bottom nav active
+    Array.from(bottomNav.querySelectorAll('button')).forEach(b => b.classList.toggle('active', b.dataset.view === view));
+    // also update left sidebar if exists
+    Array.from(document.querySelectorAll('aside .nav-button')).forEach(b => b.classList.toggle('active', b.dataset.view === view));
+    // render view
+    if (!store.currentUser && view !== 'auth') return showAuthScreen();
+    switch(view){
+      case 'dashboard': renderDashboard(); break;
+      case 'maxes': renderMaxes(); break;
+      case 'program': renderProgram(); break;
+      case 'progress': renderProgress(); break;
+      case 'settings': renderSettings(); break;
+      case 'auth': showAuthScreen(); break;
+      default: renderDashboard();
+    }
+  }
+
+  // ---------- Render: Dashboard ----------
+  function renderDashboard(){
+    const u = currentUser();
+    if(!u) return showAuthScreen();
+    main.innerHTML = `
+      <div class="card">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div style="width:64px;height:64px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--accent-2));color:white;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:20px">
+            ${u.displayName[0].toUpperCase()}
+          </div>
+          <div>
+            <div style="font-weight:800;font-size:18px">${u.displayName}</div>
+            <div class="muted">Goal: ${u.settings.goal || 'Not set'} • Experience: ${u.settings.experience}</div>
+          </div>
+          <div class="right muted">Member since ${new Date(u.createdAt).toLocaleDateString()}</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="section-title">
+          <div style="font-weight:800">Today</div>
+          <div class="muted">${new Date().toLocaleDateString()}</div>
+        </div>
+        <div style="margin-bottom:10px" id="todayWorkoutPreview"></div>
+        <div style="display:flex;gap:8px">
+          <button class="ghost" onclick="navTo('program')">View Full Program</button>
+          <button onclick="navTo('maxes')">Edit Maxes</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div style="font-weight:800">Quick Actions</div>
+          <div class="muted small">Auto-saves to your browser</div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+          <button class="ghost" onclick="exportUser()">Export Data</button>
+          <button class="ghost" onclick="importUser()">Import Data</button>
+          <button onclick="openOnboardingModal('${u.displayName}')">Re-run Onboarding</button>
+        </div>
+      </div>
+    `;
+    // render today's workout quick preview
+    renderTodayPreview();
+    updateHeaderControls();
+  }
+
+  function renderTodayPreview(){
+    const u = currentUser();
+    const today = new Date().toLocaleString(undefined,{weekday:'long'});
+    const program = u.program || generateProgram(u.settings);
+    const items = program[today] || [];
+    const container = document.getElementById('todayWorkoutPreview');
+    if(!items || items.length === 0){
+      container.innerHTML = `<div class="muted">No workout scheduled for today. View full program to edit.</div>`;
+      return;
+    }
+    container.innerHTML = items.map(it=>{
+      const max = u.maxes[it.exercise] || '';
+      const w = (it.percent && max) ? Math.round(max * it.percent / 100) + ' lbs' : (max? 'Use % or set manually':'' );
+      return `<div style="padding:10px;border-radius:8px;border:1px solid rgba(11,13,17,0.04);margin-bottom:8px">
+        <div style="font-weight:800">${it.exercise}</div>
+        <div class="muted">${it.sets} × ${it.reps} ${it.percent ? ` @ ${it.percent}%` : ''} — ${w}</div>
+      </div>`;
+    }).join('');
+  }
+
+  // ---------- Render: Maxes ----------
+  function renderMaxes(){
+    const u = currentUser();
+    main.innerHTML = `
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div style="font-weight:800">Your Maxes</div>
+          <div class="muted">Tap a value to edit — changes save automatically.</div>
+        </div>
+
+        <div style="margin-top:12px" class="max-grid" id="maxGrid"></div>
+
+        <div style="margin-top:12px;display:flex;gap:8px">
+          <input id="newLiftName" placeholder="Add a custom lift (e.g., 'Glute Bridge')" />
+          <button onclick="addCustomLift()">Add</button>
+        </div>
+      </div>
+    `;
+    const grid = document.getElementById('maxGrid');
+    grid.innerHTML = '';
+    // ensure default lifts exist
+    DEFAULT_LIFTS.forEach(l => { if (u.maxes[l] === undefined) { u.maxes[l] = ''; u.history[l] = u.history[l] || []; } });
+    // sort lifts
+    const lifts = Object.keys(u.maxes).sort((a,b) => DEFAULT_LIFTS.indexOf(a) - DEFAULT_LIFTS.indexOf(b));
+    lifts.forEach(lift => {
+      const val = u.maxes[lift] || '';
+      const percents = [40,50,55,60,65,70,75,80,85,90];
+      const pHtml = percents.map(p => {
+        const pVal = (val==='') ? '—' : Math.round(Number(val) * p / 100) + ' lbs';
+        return `<div class="percent-pill">${p}% → ${pVal}</div>`;
+      }).join('');
+      const item = document.createElement('div');
+      item.className = 'lift-card';
+      item.innerHTML = `
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="font-weight:800">${lift}</div>
+          <div class="right muted"><small>History: ${ (u.history[lift] || []).length }</small></div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <input type="number" placeholder="Enter 1RM (lbs)" value="${val}" id="input_${escapeId(lift)}" />
+          <button class="ghost" onclick="saveSingleMax('${lift}')">Save</button>
+        </div>
+        <div class="percent-row">${pHtml}</div>
+      `;
+      grid.appendChild(item);
+      // add event listener for auto-save on change
+      const input = item.querySelector(`#input_${escapeId(lift)}`);
+      input.onchange = ()=> saveSingleMax(lift);
+      input.onblur = ()=> saveSingleMax(lift);
+    });
+    // ensure store saved
+    store.users[store.currentUser] = u;
+    saveStore(store);
+    updateHeaderControls();
+  }
+
+  function escapeId(s){ return s.replace(/[^a-zA-Z0-9]/g,'_'); }
+
+  // save single max & push history entry automatically
+  function saveSingleMax(lift){
+    const u = currentUser();
+    const input = document.getElementById(`input_${escapeId(lift)}`);
+    if (!input) return;
+    const v = input.value === '' ? '' : Number(input.value);
+    if (v !== '' && isNaN(v)) return alert('Enter a valid number.');
+    u.maxes[lift] = v;
+    if (v !== '' && v !== null){
+      u.history[lift] = u.history[lift] || [];
+      u.history[lift].push({value: v, ts: new Date().toISOString()});
+    }
+    store.users[store.currentUser] = u;
+    saveStore(store);
+    // update today's preview if on dashboard
+    if (document.querySelector('[data-view="dashboard"]') || true) renderTodayPreview();
+  }
+
+  function addCustomLift(){
+    const name = document.getElementById('newLiftName').value.trim();
+    if (!name) return alert('Enter a lift name.');
+    const u = currentUser();
+    if (u.maxes[name] !== undefined) return alert('Lift already exists.');
+    u.maxes[name] = '';
+    u.history[name] = [];
+    store.users[store.currentUser] = u;
+    saveStore(store);
+    renderMaxes();
+  }
+
+  // ---------- Render: Program ----------
+  function renderProgram(){
+    const u = currentUser();
+    main.innerHTML = `
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div style="font-weight:800">Weekly Program</div>
+          <div class="muted">Mode: ${u.settings.planMode} • Days: ${u.settings.daysPerWeek || 'default'}</div>
+        </div>
+
+        <div style="margin-top:12px" class="day-tabs" id="dayTabs"></div>
+        <div id="dayContent"></div>
+      </div>
+    `;
+    const tabs = document.getElementById('dayTabs');
+    const week = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    week.forEach((d, i) => {
+      const btn = document.createElement('button');
+      btn.className = 'day-pill' + (i === (new Date().getDay()) ? ' active' : '');
+      btn.innerText = d;
+      btn.onclick = ()=> renderDay(d);
+      tabs.appendChild(btn);
+    });
+    // default open today
+    renderDay(new Date().toLocaleString(undefined,{weekday:'long'}));
+  }
+
+  function renderDay(day){
+    const u = currentUser();
+    const prog = u.program || generateProgram(u.settings);
+    const items = prog[day] || [];
+    const container = document.getElementById('dayContent');
+    if (!items || items.length === 0){
+      container.innerHTML = `<div class="muted">No exercises scheduled for ${day}. You can add exercises or edit the program in Settings.</div>`;
+      return;
+    }
+    container.innerHTML = items.map((it, idx) => {
+      const max = u.maxes[it.exercise] || '';
+      const weight = (it.percent && max) ? Math.round(max * it.percent / 100) + ' lbs' : (max ? 'Set weight manually' : 'No max set');
+      return `<div class="workout-item">
+        <div>
+          <div style="font-weight:800">${it.exercise}</div>
+          <div class="meta">${it.sets} × ${it.reps}${it.percent ? ` @ ${it.percent}%` : ''}</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-weight:800">${weight}</div>
+          <div style="margin-top:6px"><button class="ghost" onclick="editExercise('${day}', ${idx})">Edit</button></div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  function editExercise(day, idx){
+    const u = currentUser();
+    const prog = u.program || generateProgram(u.settings);
+    const it = prog[day][idx];
+    const newSets = prompt('Sets:', it.sets);
+    if (newSets === null) return;
+    const newReps = prompt('Reps:', it.reps);
+    if (newReps === null) return;
+    const newPercent = prompt('Percent (leave blank for none):', it.percent || '');
+    it.sets = Number(newSets) || it.sets;
+    it.reps = newReps || it.reps;
+    it.percent = newPercent === '' ? null : Number(newPercent);
+    // save
+    store.users[store.currentUser].program = prog;
+    saveStore(store);
+    renderProgram();
+  }
+
+  // ---------- Render: Progress (charts) ----------
+  function renderProgress(){
+    const u = currentUser();
+    main.innerHTML = `
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div style="font-weight:800">Progress Charts</div>
+          <div class="muted">Select a lift to view history</div>
+        </div>
+
+        <div style="margin-top:12px;display:flex;gap:12px;flex-wrap:wrap">
+          <select id="progressLiftSelect"></select>
+          <button onclick="exportLiftHistory()">Export Lift History</button>
+        </div>
+
+        <div style="margin-top:12px">
+          <canvas id="progressChart" style="max-width:100%;height:320px"></canvas>
+        </div>
+      </div>
+    `;
+    const select = document.getElementById('progressLiftSelect');
+    const lifts = Object.keys(u.maxes || {});
+    lifts.forEach(l => {
+      const opt = document.createElement('option'); opt.value = l; opt.text = l; select.appendChild(opt);
+    });
+    select.onchange = ()=> drawProgressChart(select.value);
+    if (lifts[0]) { select.value = lifts[0]; drawProgressChart(lifts[0]); }
+  }
+
+  function drawProgressChart(lift){
+    const u = currentUser();
+    const hist = (u.history[lift] || []).map(h => ({x: new Date(h.ts), y: Number(h.value)})).sort((a,b)=>a.x-b.x);
+    // get canvas
+    const ctx = document.getElementById('progressChart').getContext('2d');
+    if (window._proTrackerChart) window._proTrackerChart.destroy();
+    window._proTrackerChart = new Chart(ctx, {
+      type: 'line',
+      data: { datasets:[{ label: lift, data: hist, borderColor: 'rgba(31,111,235,0.95)', backgroundColor:'rgba(31,111,235,0.12)', fill:true, tension:0.2 }] },
+      options: { scales:{ x:{ type:'time', time:{unit:'day'} }, y:{ beginAtZero:false } }, plugins:{legend:{display:true}} }
+    });
+  }
+
+  function exportLiftHistory(){
+    const lift = document.getElementById('progressLiftSelect').value;
+    if (!lift) return;
+    const u = currentUser();
+    const data = u.history[lift] || [];
+    const blob = new Blob([JSON.stringify(data,null,2)], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = `${u.username}_${lift}_history.json`; a.click(); URL.revokeObjectURL(url);
+  }
+
+  // ---------- Render: Settings ----------
+  function renderSettings(){
+    const u = currentUser();
+    main.innerHTML = `
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div style="font-weight:800">Settings</div>
+          <div class="muted">Manage profile & program</div>
+        </div>
+
+        <div style="margin-top:12px">
+          <label>Display name</label>
+          <input id="setDisplayName" value="${u.displayName}" />
+          <label>Plan mode</label>
+          <select id="setPlanMode">
+            <option value="fixed" ${u.settings.planMode==='fixed'?'selected':''}>Fixed weekly</option>
+            <option value="level" ${u.settings.planMode==='level'?'selected':''}>By experience level</option>
+            <option value="custom" ${u.settings.planMode==='custom'?'selected':''}>Custom wizard</option>
+          </select>
+          <label>Experience</label>
+          <select id="setExperience">
+            <option value="beginner" ${u.settings.experience==='beginner'?'selected':''}>Beginner</option>
+            <option value="intermediate" ${u.settings.experience==='intermediate'?'selected':''}>Intermediate</option>
+            <option value="advanced" ${u.settings.experience==='advanced'?'selected':''}>Advanced</option>
+          </select>
+          <label>Goal</label>
+          <select id="setGoal">
+            <option value="muscle" ${u.settings.goal==='muscle'?'selected':''}>Muscle growth</option>
+            <option value="strength" ${u.settings.goal==='strength'?'selected':''}>Strength</option>
+            <option value="loss" ${u.settings.goal==='loss'?'selected':''}>Weight loss</option>
+            <option value="maintain" ${u.settings.goal==='maintain'?'selected':''}>Maintain</option>
+            <option value="athletic" ${u.settings.goal==='athletic'?'selected':''}>Athletic</option>
+          </select>
+
+          <div style="display:flex;gap:8px;margin-top:12px">
+            <button onclick="saveSettings()">Save Settings</button>
+            <button class="ghost" onclick="openOnboardingModal('${u.displayName}')">Re-run Onboarding</button>
+            <button class="ghost" onclick="resetUser()">Reset Data</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function saveSettings(){
+    const u = currentUser();
+    u.displayName = document.getElementById('setDisplayName').value.trim() || u.displayName;
+    u.settings.planMode = document.getElementById('setPlanMode').value;
+    u.settings.experience = document.getElementById('setExperience').value;
+    u.settings.goal = document.getElementById('setGoal').value;
+    // regenerate program
+    u.program = generateProgram(u.settings);
+    store.users[store.currentUser] = u;
+    saveStore(store);
+    alert('Settings saved.');
+    navTo('dashboard');
+  }
+
+  function resetUser(){
+    if (!confirm('Reset all your data (maxes, history, program)? This cannot be undone).')) return;
+    const u = currentUser();
+    u.maxes = {}; u.history = {}; DEFAULT_LIFTS.forEach(l => { u.maxes[l]=''; u.history[l]=[]; });
+    u.program = generateProgram(u.settings);
+    store.users[store.currentUser] = u;
+    saveStore(store);
+    navTo('dashboard');
+  }
+
+  // ---------- Data export/import ----------
+  function exportUser(){
+    const u = currentUser();
+    const data = store.users[store.currentUser];
+    const blob = new Blob([JSON.stringify(data,null,2)], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = `${u.username}_protracker.json`; a.click(); URL.revokeObjectURL(url);
+  }
+  function importUser(){
+    const inp = document.createElement('input'); inp.type='file'; inp.accept='application/json';
+    inp.onchange = (e)=>{
+      const f = e.target.files[0]; if(!f) return;
+      const reader = new FileReader();
+      reader.onload = ev => {
+        try{
+          const parsed = JSON.parse(ev.target.result);
+          // merge into current user
+          const u = currentUser();
+          // adopt maxes & history if present
+          if (parsed.maxes) u.maxes = {...u.maxes, ...parsed.maxes};
+          if (parsed.history) u.history = {...u.history, ...parsed.history};
+          if (parsed.program) u.program = parsed.program;
+          store.users[store.currentUser] = u;
+          saveStore(store);
+          alert('Import complete.');
+          navTo('maxes');
+        }catch(err){
+          alert('Invalid file.');
+        }
+      };
+      reader.readAsText(f);
+    };
+    inp.click();
+  }
+
+  // ---------- UI header controls & load ----------
+  function updateHeaderControls(){
+    const header = document.getElementById('headerControls');
+    header.innerHTML = '';
+    const u = currentUser();
+    if (u){
+      const name = document.createElement('div');
+      name.innerHTML = `<div style="font-weight:800">${u.displayName}</div><div class="muted small">${u.settings.goal || 'No goal set'}</div>`;
+      header.appendChild(name);
+      const btn = document.createElement('button'); btn.className='ghost'; btn.textContent='Logout';
+      btn.onclick = ()=>{ if(confirm('Log out?')){ store.currentUser = null; saveStore(store); showAuthScreen(); } };
+      header.appendChild(btn);
+    }
+  }
+
+  // ---------- Progress: draw if any current user else show auth ----------
+  function renderProgressIfNeeded(){ if (store.currentUser) renderProgress(); }
+
+  // ---------- Utilities ----------
+  function currentUser(){ if (!store.currentUser) return null; return store.users[store.currentUser]; }
+
+  // ---------- INITIAL LOAD ----------
+  (function init(){
+    // if there's a current user in store, load dashboard, else show auth
+    if (store.currentUser && store.users[store.currentUser]) {
+      // ensure defaults exist
+      const u = store.users[store.currentUser];
+      DEFAULT_LIFTS.forEach(l => { if (u.maxes[l] === undefined) { u.maxes[l]=''; u.history[l]=u.history[l]||[]; } });
+      if (!u.program) u.program = generateProgram(u.settings);
+      store.users[store.currentUser] = u;
+      saveStore(store);
+      // show dashboard
+      navTo('dashboard');
+    } else {
+      showAuthScreen();
+    }
+  })();
+
+  // ensure sidebar nav works on load
+  Array.from(document.querySelectorAll('aside .nav-button')).forEach(btn => {
+    btn.onclick = ()=> { navTo(btn.dataset.view); };
+  });
+
+  // expose navTo globally for bottom nav
+  window.navTo = navTo;
+  // expose onboarding
+  window.openOnboardingModal = openOnboardingModal;
+
+  </script>
+</body>
+</html>
